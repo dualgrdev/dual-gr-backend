@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Login - Financeiro</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="centered">
+  <div class="card">
+    <h1>Financeiro</h1>
+    <p class="muted">Acesso isolado (nova aba) com CPF e senha.</p>
+
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/financeiro/login">
+      <label>CPF</label>
+      <input name="cpf" placeholder="Somente números" required />
+      <label>Senha</label>
+      <input name="senha" type="password" required />
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+</body>
+</html>

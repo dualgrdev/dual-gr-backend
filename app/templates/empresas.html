@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h2>Empresas Parceiras</h2>
+      <p class="muted">Cadastre empresas autorizadas. Somente empresas ativas são aceitas no cadastro do App.</p>
+    </div>
+  </div>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg == "criada" %}
+    <div class="toast ok">Empresa cadastrada com sucesso.</div>
+  {% elif msg == "duplicada" %}
+    <div class="toast warn">Já existe uma empresa com esse nome.</div>
+  {% elif msg == "nome_invalido" %}
+    <div class="toast warn">Nome inválido.</div>
+  {% elif msg == "atualizada" %}
+    <div class="toast ok">Empresa atualizada.</div>
+  {% elif msg == "removida" %}
+    <div class="toast ok">Empresa removida.</div>
+  {% elif msg == "nao_encontrada" %}
+    <div class="toast warn">Empresa não encontrada.</div>
+  {% endif %}
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Nova Empresa</h3>
+      <form method="post" action="/admin/empresas/create">
+        <label>Nome da empresa</label>
+        <input name="nome" placeholder="Ex.: Escola ABC, Empresa XPTO" required />
+
+        <label>CNPJ (opcional)</label>
+        <input name="cnpj" placeholder="Somente para referência" />
+
+        <button type="submit">Cadastrar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Lista</h3>
+
+      {% if empresas|length == 0 %}
+        <p class="muted">Nenhuma empresa cadastrada.</p>
+      {% else %}
+        <div class="table">
+          <div class="thead">
+            <div>Empresa</div>
+            <div>Status</div>
+            <div class="right">Ações</div>
+          </div>
+
+          {% for e in empresas %}
+            <div class="trow">
+              <div>
+                <div class="strong">{{ e.nome }}</div>
+                {% if e.cnpj %}
+                  <div class="muted small">CNPJ: {{ e.cnpj }}</div>
+                {% endif %}
+              </div>
+
+              <div>
+                {% if e.is_active %}
+                  <span class="pill ok">Ativa</span>
+                {% else %}
+                  <span class="pill off">Inativa</span>
+                {% endif %}
+              </div>
+
+              <div class="right actions">
+                <form method="post" action="/admin/empresas/toggle">
+                  <input type="hidden" name="empresa_id" value="{{ e.id }}" />
+                  {% if e.is_active %}
+                    <button class="btn-secondary" type="submit">Desativar</button>
+                  {% else %}
+                    <button class="btn-secondary" type="submit">Ativar</button>
+                  {% endif %}
+                </form>
+
+                <form method="post" action="/admin/empresas/delete" onsubmit="return confirm('Remover empresa?');">
+                  <input type="hidden" name="empresa_id" value="{{ e.id }}" />
+                  <button class="btn-danger" type="submit">Remover</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

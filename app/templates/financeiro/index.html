@@ -1,0 +1,101 @@
+{% extends "financeiro/layout.html" %}
+{% block content %}
+  <h2>Cadastros Financeiro</h2>
+  <p class="muted">Base do financeiro: categorias, formas de pagamento e contas.</p>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg == "ok" %}<div class="toast ok">Atualização realizada.</div>{% endif %}
+  {% if msg in ["cat","forma","conta","cat_dup","forma_dup","conta_dup"] %}<div class="toast warn">Verifique o cadastro (nome inválido ou duplicado).</div>{% endif %}
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Categorias</h3>
+      <form method="post" action="/financeiro/categorias/create">
+        <label>Nome</label>
+        <input name="nome" required />
+        <button type="submit">Adicionar</button>
+      </form>
+
+      <div class="table" style="margin-top:10px;">
+        <div class="thead">
+          <div>Categoria</div>
+          <div>Status</div>
+          <div class="right">Ações</div>
+        </div>
+        {% for c in categorias %}
+          <div class="trow">
+            <div class="strong">{{ c.nome }}</div>
+            <div>{% if c.is_active %}<span class="pill ok">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</div>
+            <div class="right actions">
+              <form method="post" action="/financeiro/toggle">
+                <input type="hidden" name="kind" value="cat"/>
+                <input type="hidden" name="item_id" value="{{ c.id }}"/>
+                <button class="btn-secondary" type="submit">{% if c.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Formas de Pagamento</h3>
+      <form method="post" action="/financeiro/formas/create">
+        <label>Nome</label>
+        <input name="nome" required />
+        <button type="submit">Adicionar</button>
+      </form>
+
+      <div class="table" style="margin-top:10px;">
+        <div class="thead">
+          <div>Forma</div>
+          <div>Status</div>
+          <div class="right">Ações</div>
+        </div>
+        {% for f in formas %}
+          <div class="trow">
+            <div class="strong">{{ f.nome }}</div>
+            <div>{% if f.is_active %}<span class="pill ok">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</div>
+            <div class="right actions">
+              <form method="post" action="/financeiro/toggle">
+                <input type="hidden" name="kind" value="forma"/>
+                <input type="hidden" name="item_id" value="{{ f.id }}"/>
+                <button class="btn-secondary" type="submit">{% if f.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <h3>Contas</h3>
+    <form method="post" action="/financeiro/contas/create">
+      <label>Nome</label>
+      <input name="nome" required />
+      <button type="submit">Adicionar</button>
+    </form>
+
+    <div class="table" style="margin-top:10px;">
+      <div class="thead">
+        <div>Conta</div>
+        <div>Status</div>
+        <div class="right">Ações</div>
+      </div>
+      {% for c in contas %}
+        <div class="trow">
+          <div class="strong">{{ c.nome }}</div>
+          <div>{% if c.is_active %}<span class="pill ok">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</div>
+          <div class="right actions">
+            <form method="post" action="/financeiro/toggle">
+              <input type="hidden" name="kind" value="conta"/>
+              <input type="hidden" name="item_id" value="{{ c.id }}"/>
+              <button class="btn-secondary" type="submit">{% if c.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

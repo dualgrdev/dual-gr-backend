@@ -1,0 +1,160 @@
+{% extends "financeiro/layout.html" %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h2>Lançamentos</h2>
+      <p class="muted">Entradas e saídas com filtros e totais.</p>
+    </div>
+  </div>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg == "ok" %}<div class="toast ok">Lançamento registrado.</div>{% endif %}
+  {% if msg in ["tipo","data","valor","desc"] %}<div class="toast warn">Verifique os campos do lançamento.</div>{% endif %}
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Novo lançamento</h3>
+      <form method="post" action="/financeiro/lancamentos/create">
+        <label>Tipo</label>
+        <select name="tipo" class="select" required>
+          <option value="ENTRADA">Entrada</option>
+          <option value="SAIDA">Saída</option>
+        </select>
+
+        <label>Status</label>
+        <select name="status" class="select" required>
+          <option value="PAGO">Pago</option>
+          <option value="PENDENTE">Pendente</option>
+        </select>
+
+        <label>Data</label>
+        <input name="data" type="date" required />
+
+        <label>Valor</label>
+        <input name="valor" placeholder="Ex.: 150.00" required />
+
+        <label>Descrição</label>
+        <input name="descricao" required />
+
+        <label>Categoria (opcional)</label>
+        <select name="categoria_id" class="select">
+          <option value="">—</option>
+          {% for c in categorias %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Forma de pagamento (opcional)</label>
+        <select name="forma_pagamento_id" class="select">
+          <option value="">—</option>
+          {% for f in formas %}
+            <option value="{{ f.id }}">{{ f.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Conta (opcional)</label>
+        <select name="conta_id" class="select">
+          <option value="">—</option>
+          {% for c in contas %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit">Salvar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Filtros</h3>
+      <form method="get" action="/financeiro/lancamentos">
+        <label>Data inicial</label>
+        <input name="dt_ini" type="date" value="{{ request.query_params.get('dt_ini','') }}" />
+
+        <label>Data final</label>
+        <input name="dt_fim" type="date" value="{{ request.query_params.get('dt_fim','') }}" />
+
+        <label>Tipo</label>
+        <select name="tipo" class="select">
+          <option value="">Todos</option>
+          <option value="ENTRADA" {% if request.query_params.get('tipo')=='ENTRADA' %}selected{% endif %}>Entrada</option>
+          <option value="SAIDA" {% if request.query_params.get('tipo')=='SAIDA' %}selected{% endif %}>Saída</option>
+        </select>
+
+        <label>Status</label>
+        <select name="status" class="select">
+          <option value="">Todos</option>
+          <option value="PAGO" {% if request.query_params.get('status')=='PAGO' %}selected{% endif %}>Pago</option>
+          <option value="PENDENTE" {% if request.query_params.get('status')=='PENDENTE' %}selected{% endif %}>Pendente</option>
+        </select>
+
+        <label>Categoria</label>
+        <select name="cat_id" class="select">
+          <option value="">—</option>
+          {% for c in categorias %}
+            <option value="{{ c.id }}" {% if request.query_params.get('cat_id')== (c.id|string) %}selected{% endif %}>{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Forma</label>
+        <select name="forma_id" class="select">
+          <option value="">—</option>
+          {% for f in formas %}
+            <option value="{{ f.id }}" {% if request.query_params.get('forma_id')== (f.id|string) %}selected{% endif %}>{{ f.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <label>Conta</label>
+        <select name="conta_id" class="select">
+          <option value="">—</option>
+          {% for c in contas %}
+            <option value="{{ c.id }}" {% if request.query_params.get('conta_id')== (c.id|string) %}selected{% endif %}>{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit">Aplicar filtros</button>
+      </form>
+
+      <div style="margin-top:12px;" class="muted">
+        Total Entradas: <b>{{ "%.2f"|format(total_entrada) }}</b><br/>
+        Total Saídas: <b>{{ "%.2f"|format(total_saida) }}</b>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <a class="btn-secondary" style="text-decoration:none;" href="/financeiro/relatorios/export.xlsx?{{ request.query_params }}">Exportar Excel</a>
+        <a class="btn-secondary" style="text-decoration:none;" href="/financeiro/relatorios/export.pdf">Exportar PDF</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <h3>Últimos lançamentos (até 500)</h3>
+
+    {% if lancs|length == 0 %}
+      <p class="muted">Nenhum lançamento encontrado.</p>
+    {% else %}
+      <div class="table">
+        <div class="thead">
+          <div>Lançamento</div>
+          <div>Status</div>
+          <div class="right">Valor</div>
+        </div>
+        {% for l in lancs %}
+          <div class="trow">
+            <div>
+              <div class="strong">{{ l.data.strftime("%d/%m/%Y") }} — {{ l.tipo }}</div>
+              <div class="muted small">{{ l.descricao }}</div>
+            </div>
+            <div>
+              {% if l.status == "PAGO" %}
+                <span class="pill ok">Pago</span>
+              {% else %}
+                <span class="pill off">Pendente</span>
+              {% endif %}
+            </div>
+            <div class="right"><span class="pill ok">{{ "%.2f"|format(l.valor) }}</span></div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ title or "Dual Saúde - Financeiro" }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Dual Saúde — Financeiro</div>
+    <div class="top-actions">
+      <a class="link" href="/financeiro/dashboard">Dashboard</a>
+      <a class="link" href="/financeiro/lancamentos">Lançamentos</a>
+      <a class="link" href="/financeiro/cadastros">Cadastros</a>
+      <a class="link" href="/financeiro/relatorios">Relatórios</a>
+      <a class="link danger" href="/financeiro/logout">Sair</a>
+    </div>
+  </div>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

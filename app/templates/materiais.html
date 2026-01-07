@@ -1,0 +1,88 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h2>Materiais de Apoio</h2>
+      <p class="muted">Adicione PDFs ou imagens para aparecerem no App para download/visualização.</p>
+    </div>
+  </div>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg == "criado" %}<div class="toast ok">Material criado.</div>{% endif %}
+  {% if msg == "atualizado" %}<div class="toast ok">Material atualizado.</div>{% endif %}
+  {% if msg == "removido" %}<div class="toast ok">Material removido.</div>{% endif %}
+  {% if msg == "nao_encontrado" %}<div class="toast warn">Material não encontrado.</div>{% endif %}
+  {% if msg == "arquivo_invalido" %}<div class="toast warn">Arquivo inválido para o tipo escolhido.</div>{% endif %}
+  {% if msg == "invalido" %}<div class="toast warn">Preencha os campos corretamente.</div>{% endif %}
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Novo Material</h3>
+      <form method="post" action="/admin/materiais/create" enctype="multipart/form-data">
+        <label>Título</label>
+        <input name="titulo" required />
+
+        <label>Descrição (opcional)</label>
+        <input name="descricao" />
+
+        <label>Tipo</label>
+        <select name="tipo" class="select" required>
+          <option value="PDF">PDF</option>
+          <option value="IMG">Imagem</option>
+        </select>
+
+        <label>Arquivo</label>
+        <input name="arquivo" type="file" required />
+
+        <button type="submit">Cadastrar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Lista</h3>
+
+      {% if materiais|length == 0 %}
+        <p class="muted">Nenhum material cadastrado.</p>
+      {% else %}
+        <div class="table">
+          <div class="thead">
+            <div>Material</div>
+            <div>Status</div>
+            <div class="right">Ações</div>
+          </div>
+
+          {% for m in materiais %}
+            <div class="trow">
+              <div>
+                <div class="strong">{{ m.titulo }}</div>
+                {% if m.descricao %}<div class="muted small">{{ m.descricao }}</div>{% endif %}
+                <div class="muted small">Tipo: {{ m.tipo }}</div>
+                <div class="muted small"><a href="{{ m.arquivo_url }}" target="_blank">Abrir/Download</a></div>
+              </div>
+
+              <div>
+                {% if m.is_active %}
+                  <span class="pill ok">Ativo</span>
+                {% else %}
+                  <span class="pill off">Inativo</span>
+                {% endif %}
+              </div>
+
+              <div class="right actions">
+                <form method="post" action="/admin/materiais/toggle">
+                  <input type="hidden" name="material_id" value="{{ m.id }}" />
+                  <button class="btn-secondary" type="submit">{% if m.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+                </form>
+
+                <form method="post" action="/admin/materiais/delete" onsubmit="return confirm('Remover material?');">
+                  <input type="hidden" name="material_id" value="{{ m.id }}" />
+                  <button class="btn-danger" type="submit">Remover</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "financeiro/layout.html" %}
+{% block content %}
+  <h2>Relatórios</h2>
+  <p class="muted">Exporte lançamentos em Excel e PDF.</p>
+
+  <div class="card">
+    <h3>Exportações</h3>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+      <a class="btn-secondary" style="text-decoration:none;" href="/financeiro/relatorios/export.xlsx">Exportar Excel</a>
+      <a class="btn-secondary" style="text-decoration:none;" href="/financeiro/relatorios/export.pdf">Exportar PDF</a>
+    </div>
+
+    <p class="muted" style="margin-top:12px;">
+      Dica: para exportar com filtros, use a exportação pelo botão dentro de “Lançamentos”.
+    </p>
+  </div>
+{% endblock %}

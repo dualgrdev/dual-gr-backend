@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h2>Informações do App (Campanhas)</h2>
+      <p class="muted">Mensagens e imagens exibidas na Home do aplicativo em rolagem automática.</p>
+    </div>
+  </div>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg == "criada" %}<div class="toast ok">Campanha criada.</div>{% endif %}
+  {% if msg == "atualizada" %}<div class="toast ok">Campanha atualizada.</div>{% endif %}
+  {% if msg == "removida" %}<div class="toast ok">Campanha removida.</div>{% endif %}
+  {% if msg == "nao_encontrada" %}<div class="toast warn">Campanha não encontrada.</div>{% endif %}
+  {% if msg == "img_invalida" %}<div class="toast warn">Imagem inválida (use jpg/png/webp).</div>{% endif %}
+  {% if msg == "invalido" %}<div class="toast warn">Preencha título e mensagem corretamente.</div>{% endif %}
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Nova Campanha</h3>
+      <form method="post" action="/admin/campanhas/create" enctype="multipart/form-data">
+        <label>Título</label>
+        <input name="titulo" required />
+
+        <label>Mensagem</label>
+        <input name="mensagem" required />
+
+        <label>Ordem (0 = primeiro)</label>
+        <input name="ordem" type="number" value="0" />
+
+        <label>Imagem (opcional)</label>
+        <input name="imagem" type="file" accept=".jpg,.jpeg,.png,.webp" />
+
+        <button type="submit">Cadastrar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Lista</h3>
+
+      {% if campanhas|length == 0 %}
+        <p class="muted">Nenhuma campanha cadastrada.</p>
+      {% else %}
+        <div class="table">
+          <div class="thead">
+            <div>Campanha</div>
+            <div>Status</div>
+            <div class="right">Ações</div>
+          </div>
+
+          {% for c in campanhas %}
+            <div class="trow">
+              <div>
+                <div class="strong">{{ c.titulo }}</div>
+                <div class="muted small">{{ c.mensagem }}</div>
+                <div class="muted small">Ordem: {{ c.ordem }}</div>
+                {% if c.imagem_url %}
+                  <div class="muted small">Imagem: <a href="{{ c.imagem_url }}" target="_blank">abrir</a></div>
+                {% endif %}
+              </div>
+
+              <div>
+                {% if c.is_active %}
+                  <span class="pill ok">Ativa</span>
+                {% else %}
+                  <span class="pill off">Inativa</span>
+                {% endif %}
+              </div>
+
+              <div class="right actions">
+                <form method="post" action="/admin/campanhas/toggle">
+                  <input type="hidden" name="campanha_id" value="{{ c.id }}" />
+                  <button class="btn-secondary" type="submit">{% if c.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+                </form>
+
+                <form method="post" action="/admin/campanhas/delete" onsubmit="return confirm('Remover campanha?');">
+                  <input type="hidden" name="campanha_id" value="{{ c.id }}" />
+                  <button class="btn-danger" type="submit">Remover</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

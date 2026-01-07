@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dotenv (se você criar local)
+.env
+
+# DB local
+*.db
+
+# Alembic caches
+.alembic/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

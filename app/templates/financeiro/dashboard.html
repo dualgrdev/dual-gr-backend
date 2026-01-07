@@ -1,0 +1,32 @@
+{% extends "financeiro/layout.html" %}
+{% block content %}
+  <h2>Dashboard Financeiro</h2>
+
+  <div class="grid">
+    <div class="kpi">
+      <div class="kpi-title">Receita do mês</div>
+      <div class="kpi-value">{{ "%.2f"|format(receita_mes) }}</div>
+      <div class="muted">Entradas pagas</div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-title">Despesa do mês</div>
+      <div class="kpi-value">{{ "%.2f"|format(despesa_mes) }}</div>
+      <div class="muted">Saídas pagas</div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-title">Pendentes</div>
+      <div class="kpi-value">{{ pendentes }}</div>
+      <div class="muted">A liquidar</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Saldo do mês</h3>
+    <p class="muted">Receita - Despesa</p>
+    <div style="font-size:28px; font-weight:900; margin-top:6px;">
+      {{ "%.2f"|format(saldo_mes) }}
+    </div>
+  </div>
+{% endblock %}

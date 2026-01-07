@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block content %}
+  <h2>Dashboard</h2>
+
+  <div class="grid">
+    <div class="kpi">
+      <div class="kpi-title">Acessos hoje</div>
+      <div class="kpi-value">{{ acessos_hoje }}</div>
+      <div class="muted">Eventos registrados no dia</div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-title">Acessos no mês</div>
+      <div class="kpi-value">{{ acessos_mes }}</div>
+      <div class="muted">Eventos registrados no mês</div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-title">Empresas parceiras</div>
+      <div class="kpi-value">{{ empresas_total }}</div>
+      <div class="muted">Cadastradas no painel</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Top acessos por empresa (mês)</h3>
+
+    {% if top_empresas|length == 0 %}
+      <p class="muted">Sem eventos registrados ainda.</p>
+    {% else %}
+      <div class="table">
+        <div class="thead">
+          <div>Empresa</div>
+          <div class="right">Acessos</div>
+          <div></div>
+        </div>
+
+        {% for nome, total in top_empresas %}
+          <div class="trow">
+            <div class="strong">{{ nome }}</div>
+            <div class="right"><span class="pill ok">{{ total }}</span></div>
+            <div></div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Notas</h3>
+    <p class="muted">
+      Nesta etapa, o App registra eventos via <code>/api/metrics/event</code>.
+      Na etapa de segurança, vamos autenticar esse endpoint via JWT do paciente (sem depender de CPF no payload).
+    </p>
+  </div>
+{% endblock %}
