@@ -12,7 +12,7 @@ SQLAlchemy==2.0.32
 alembic==1.13.2
 
 # Postgres driver (compatível com "postgresql+psycopg://")
-psycopg[binary]==3.2.1
+psycopg[binary]==3.3.2
 
 # =========================
 # Auth / Security
