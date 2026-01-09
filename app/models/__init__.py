@@ -17,8 +17,7 @@ __all__ = [
     "Campanha",
     "MaterialApoio",
     "FinanceCategoria",
-"FinanceFormaPagamento",
-"FinanceConta",
-"FinanceLancamento",
-]   
- 
+    "FinanceFormaPagamento",
+    "FinanceConta",
+    "FinanceLancamento",
+]

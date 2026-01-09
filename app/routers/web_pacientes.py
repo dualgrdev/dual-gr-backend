@@ -1,4 +1,3 @@
-# app/routers/web_pacientes.py
 from __future__ import annotations
 
 import re
@@ -7,12 +6,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.db.session import SessionLocal
-from app.models import Paciente, Empresa
+from app.models.paciente import Paciente
+from app.models.empresa import Empresa
 
-
-router = APIRouter(prefix="/pacientes", tags=["Web - Pacientes"])
+router = APIRouter(prefix="/admin/pacientes", tags=["Web - Pacientes"])
 
 
 # =========================
@@ -27,30 +27,12 @@ def get_db():
 
 
 # =========================
-# Auth guard (compatível)
+# Guard: painel
 # =========================
-def _is_logged_in(request: Request) -> bool:
-    """
-    Fallback simples para não quebrar:
-    - Se você já tem um padrão de session no web_auth, normalmente existe algo como:
-      request.session["user_id"] / request.session["admin_id"] / request.session["auth"]
-    Ajuste depois se quiser, mas assim o router já roda.
-    """
-    sess = getattr(request, "session", None) or {}
-    # tenta chaves comuns
-    return bool(
-        sess.get("user_id")
-        or sess.get("admin_id")
-        or sess.get("logged_in")
-        or sess.get("email")
-        or sess.get("usuario_id")
-    )
-
-
-def require_web_login(request: Request):
-    if not _is_logged_in(request):
-        # ajuste para o seu caminho de login do painel, se for diferente
-        return RedirectResponse(url="/login", status_code=302)
+def require_admin_login(request: Request):
+    user_id = request.session.get("painel_user_id")
+    if not user_id:
+        return RedirectResponse(url="/admin/login", status_code=303)
     return None
 
 
@@ -74,19 +56,27 @@ def pacientes_list(
     page: int = 1,
     page_size: int = 20,
 ):
-    # guard de sessão (não quebra seu app)
-    redir = require_web_login(request)
+    redir = require_admin_login(request)
     if redir:
         return redir
 
     templates = request.app.state.templates
 
-    # sanitização de paginação
-    page = max(int(page or 1), 1)
-    page_size = int(page_size or 20)
+    # paginação segura
+    try:
+        page = int(page or 1)
+    except Exception:
+        page = 1
+    page = max(page, 1)
+
+    try:
+        page_size = int(page_size or 20)
+    except Exception:
+        page_size = 20
     page_size = 20 if page_size not in (10, 20, 50, 100) else page_size
 
     cpf_digits = only_digits(cpf)
+
     empresa_id_int: Optional[int] = None
     if str(empresa_id).strip().isdigit():
         empresa_id_int = int(str(empresa_id).strip())
@@ -108,28 +98,14 @@ def pacientes_list(
     )
 
     if cpf_digits:
-        # cpf no seu model é String(11) com index, então igualdade é o melhor
         query = query.filter(Paciente.cpf == cpf_digits)
 
     if empresa_id_int:
         query = query.filter(Paciente.empresa_id == empresa_id_int)
 
     if q_clean:
-        # busca por nome (LIKE case-insensitive)
-        # SQLite não tem ILIKE, então usamos lower()
         q_like = f"%{q_clean.lower()}%"
-        query = query.filter(
-            (Paciente.nome_completo.ilike(q_like))  # Postgres
-            if hasattr(Paciente.nome_completo, "ilike")
-            else (Paciente.nome_completo != None)  # placeholder
-        )
-        # fallback compatível com SQLite:
-        try:
-            from sqlalchemy import func
-            query = query.filter(func.lower(Paciente.nome_completo).like(q_like))
-        except Exception:
-            # se não der, não quebra; só ignora o q
-            pass
+        query = query.filter(func.lower(Paciente.nome_completo).like(q_like))
 
     total = query.count()
 
@@ -150,7 +126,6 @@ def pacientes_list(
                 "celular": p.celular,
                 "empresa_id": p.empresa_id,
                 "empresa_nome": e.nome if e else "",
-                "is_active": p.is_active,
                 "created_at": p.created_at,
                 "last_login_at": p.last_login_at,
             }

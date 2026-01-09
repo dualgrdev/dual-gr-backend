@@ -1,0 +1,132 @@
+{# app/templates/pacientes/list.html #}
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>Pacientes</h1>
+      <p class="muted">Listagem de pacientes cadastrados com filtros por CPF e empresa.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="get" class="filters">
+      <div class="field">
+        <label>CPF</label>
+        <input name="cpf" value="{{ filters.cpf or '' }}" placeholder="Somente números" inputmode="numeric" />
+      </div>
+
+      <div class="field">
+        <label>Empresa</label>
+        <select name="empresa_id">
+          <option value="">Todas</option>
+          {% for e in empresas %}
+            <option value="{{ e.id }}" {% if filters.empresa_id == e.id %}selected{% endif %}>
+              {{ e.nome }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Nome</label>
+        <input name="q" value="{{ filters.q or '' }}" placeholder="Buscar por nome" />
+      </div>
+
+      <div class="field actions">
+        <button class="btn" type="submit">Filtrar</button>
+        <a class="btn btn-outline" href="/admin/pacientes">Limpar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="table-meta">
+      <div class="muted">
+        Total: <strong>{{ pagination.total }}</strong>
+      </div>
+
+      <div class="muted">
+        Página <strong>{{ pagination.page }}</strong> de <strong>{{ pagination.pages }}</strong>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th>Nome</th>
+            <th style="width: 140px;">CPF</th>
+            <th style="width: 140px;">Celular</th>
+            <th>Empresa</th>
+            <th style="width: 160px;">Criado em</th>
+            <th style="width: 160px;">Último login</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if pacientes|length == 0 %}
+            <tr>
+              <td colspan="7" class="muted">Nenhum paciente encontrado com os filtros atuais.</td>
+            </tr>
+          {% else %}
+            {% for p in pacientes %}
+              <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.nome_completo }}</td>
+                <td>{{ p.cpf }}</td>
+                <td>{{ p.celular }}</td>
+                <td>{{ p.empresa_nome }}</td>
+                <td>{{ p.created_at.strftime("%d/%m/%Y %H:%M") if p.created_at else "" }}</td>
+                <td>{{ p.last_login_at.strftime("%d/%m/%Y %H:%M") if p.last_login_at else "-" }}</td>
+              </tr>
+            {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      {% if pagination.has_prev %}
+        <a class="btn btn-outline"
+           href="?cpf={{ filters.cpf or '' }}&empresa_id={{ filters.empresa_id or '' }}&q={{ filters.q or '' }}&page={{ pagination.prev_page }}&page_size={{ pagination.page_size }}">
+           Anterior
+        </a>
+      {% else %}
+        <span class="btn btn-outline disabled">Anterior</span>
+      {% endif %}
+
+      {% if pagination.has_next %}
+        <a class="btn"
+           href="?cpf={{ filters.cpf or '' }}&empresa_id={{ filters.empresa_id or '' }}&q={{ filters.q or '' }}&page={{ pagination.next_page }}&page_size={{ pagination.page_size }}">
+           Próxima
+        </a>
+      {% else %}
+        <span class="btn disabled">Próxima</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  /* CSS mínimo local (não depende do seu CSS global) */
+  .page { display: flex; flex-direction: column; gap: 14px; }
+  .page-header { display: flex; align-items: flex-end; justify-content: space-between; }
+  .muted { color: #64748B; }
+  .card { background: #fff; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+  .field label { display: block; font-size: 12px; color: #64748B; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; padding: 10px 10px; border: 1px solid #E5E7EB; border-radius: 10px; outline: none; }
+  .actions { display: flex; gap: 10px; }
+  .btn { background: #0F8F8E; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+  .btn-outline { background: transparent; color: #0F172A; border: 1px solid #E5E7EB; }
+  .btn.disabled, .btn-outline.disabled { opacity: .5; pointer-events: none; }
+  .table-wrap { overflow: auto; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th, .table td { border-bottom: 1px solid #F1F5F9; padding: 10px; text-align: left; }
+  .table th { font-size: 12px; color: #64748B; }
+  .table-meta { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .pager { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+</style>
+{% endblock %}

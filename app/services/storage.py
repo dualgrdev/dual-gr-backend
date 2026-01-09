@@ -1,7 +1,6 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from fastapi import UploadFile
 
@@ -22,9 +21,16 @@ def safe_ext(filename: str) -> str:
     return ext
 
 
+def _join_public_url(*parts: str) -> str:
+    base = (settings.PUBLIC_BASE_URL or "").rstrip("/")
+    path = "/".join([p.strip("/").lstrip("/") for p in parts if p is not None])
+    return f"{base}/{path}"
+
+
 def save_upload_local(file: UploadFile, subdir: str, allowed_exts: set[str]) -> str:
     """
-    Salva arquivo no storage local e retorna URL pública.
+    Salva arquivo no storage local e retorna URL pública (servida via /uploads).
+    Observação: em Render, o filesystem pode não ser persistente sem disco persistente.
     """
     base = ensure_storage_dir()
     folder = base / subdir
@@ -37,7 +43,7 @@ def save_upload_local(file: UploadFile, subdir: str, allowed_exts: set[str]) -> 
     new_name = f"{uuid.uuid4().hex}{ext}"
     dst = folder / new_name
 
-    # streaming simples
+    # streaming simples (sincrono)
     with dst.open("wb") as f:
         while True:
             chunk = file.file.read(1024 * 1024)
@@ -45,5 +51,4 @@ def save_upload_local(file: UploadFile, subdir: str, allowed_exts: set[str]) -> 
                 break
             f.write(chunk)
 
-    # URL pública (servida pelo backend via /uploads)
-    return f"{settings.PUBLIC_BASE_URL}/uploads/{subdir}/{new_name}"
+    return _join_public_url("uploads", subdir, new_name)

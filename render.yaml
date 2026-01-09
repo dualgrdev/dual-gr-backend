@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: dual-gr-backend
+    env: python
+    plan: starter   # pode trocar depois
+    region: oregon  # padrão
+    buildCommand: |
+      pip install -r requirements.txt
+      alembic upgrade head
+    startCommand: >
+      gunicorn -k uvicorn.workers.UvicornWorker
+      -w 2
+      -b 0.0.0.0:$PORT
+      app.main:app
+    envVars:
+      - key: APP_NAME
+        value: Dual GR
+
+      - key: ENV
+        value: prod
+
+      - key: SECRET_KEY
+        generateValue: true
+
+      - key: CORS_ORIGINS
+        value: "*"
+
+      - key: MAX_UPLOAD_MB
+        value: "15"
+
+      - key: ALLOWED_UPLOAD_MIME
+        value: application/pdf,image/jpeg,image/png
+
+      - key: AI_PROVIDER
+        value: openai
+
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+
+      - key: AI_TEMPERATURE
+        value: "0.1"
+
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: dual-gr-backend
+          property: url
+
+databases:
+  - name: dual-gr-db
+    plan: starter
