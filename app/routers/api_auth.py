@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -87,6 +88,15 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
     if exists:
         raise HTTPException(status_code=409, detail="CPF já cadastrado.")
 
+    # bcrypt limite 72 bytes: hash_password() pode levantar ValueError agora
+    try:
+        pw_hash = hash_password(data.senha)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        # fallback defensivo: não vaza erro interno
+        raise HTTPException(status_code=400, detail="Senha inválida.")
+
     paciente = Paciente(
         nome_completo=(data.nome_completo or "").strip(),
         cpf=cpf,
@@ -94,7 +104,7 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
         empresa_id=empresa.id,
         endereco=(data.endereco or "").strip(),
         cep=cep,
-        password_hash=hash_password(data.senha),
+        password_hash=pw_hash,
         pergunta_seg=(data.pergunta_seg or "").strip(),
         resposta_seg_norm=normalize_text(data.resposta_seg),
         is_active=True,
@@ -109,8 +119,19 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
 def login(data: LoginIn, db: Session = Depends(get_db)):
     cpf = only_digits(data.cpf)
     user = db.query(Paciente).filter(Paciente.cpf == cpf, Paciente.is_active == True).first()
-    if not user or not verify_password(data.senha, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="CPF ou senha inválidos.")
+
+    # Nunca deixar bcrypt/passlib derrubar com 500
+    ok = False
+    try:
+        ok = bool(user) and verify_password(data.senha, user.password_hash)
+    except Exception:
+        ok = False
+
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CPF ou senha inválidos.",
+        )
 
     user.last_login_at = datetime.utcnow()
     db.commit()
@@ -159,7 +180,13 @@ def forgot_reset(data: ResetPasswordIn, db: Session = Depends(get_db)):
             detail="Senha fraca. Use mínimo 8 caracteres, com letras e números.",
         )
 
-    user.password_hash = hash_password(data.nova_senha)
+    try:
+        user.password_hash = hash_password(data.nova_senha)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Senha inválida.")
+
     db.commit()
 
     return {"success": True, "message": "Senha alterada com sucesso."}
