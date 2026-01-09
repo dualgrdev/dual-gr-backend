@@ -1,183 +1,31 @@
-# app/routers/web_pacientes.py
-from __future__ import annotations
+from datetime import datetime
 
-import re
-from typing import Optional
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
-
-from app.db.session import SessionLocal
-from app.models import Paciente, Empresa
+from app.db.base import Base
 
 
-router = APIRouter(prefix="/pacientes", tags=["Web - Pacientes"])
+class Paciente(Base):
+    __tablename__ = "pacientes"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-# =========================
-# DB
-# =========================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    nome_completo: Mapped[str] = mapped_column(String(200), nullable=False)
+    cpf: Mapped[str] = mapped_column(String(11), unique=True, index=True, nullable=False)
+    celular: Mapped[str] = mapped_column(String(11), nullable=False)
 
+    empresa_id: Mapped[int] = mapped_column(Integer, ForeignKey("empresas.id"), nullable=False)
+    empresa = relationship("Empresa")
 
-# =========================
-# Auth guard (compatível)
-# =========================
-def _is_logged_in(request: Request) -> bool:
-    """
-    Fallback simples para não quebrar:
-    - Se você já tem um padrão de session no web_auth, normalmente existe algo como:
-      request.session["user_id"] / request.session["admin_id"] / request.session["auth"]
-    Ajuste depois se quiser, mas assim o router já roda.
-    """
-    sess = getattr(request, "session", None) or {}
-    # tenta chaves comuns
-    return bool(
-        sess.get("user_id")
-        or sess.get("admin_id")
-        or sess.get("logged_in")
-        or sess.get("email")
-        or sess.get("usuario_id")
-    )
+    endereco: Mapped[str] = mapped_column(String(250), nullable=False)
+    cep: Mapped[str] = mapped_column(String(8), nullable=False)
 
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
-def require_web_login(request: Request):
-    if not _is_logged_in(request):
-        # ajuste para o seu caminho de login do painel, se for diferente
-        return RedirectResponse(url="/login", status_code=302)
-    return None
+    pergunta_seg: Mapped[str] = mapped_column(String(200), nullable=False)
+    resposta_seg_norm: Mapped[str] = mapped_column(String(200), nullable=False)
 
-
-# =========================
-# Helpers
-# =========================
-def only_digits(s: str) -> str:
-    return re.sub(r"\D+", "", (s or ""))
-
-
-# =========================
-# LISTAR PACIENTES (com filtros)
-# =========================
-@router.get("/", response_class=HTMLResponse)
-def pacientes_list(
-    request: Request,
-    db: Session = Depends(get_db),
-    cpf: str = "",
-    empresa_id: str = "",
-    q: str = "",
-    page: int = 1,
-    page_size: int = 20,
-):
-    # guard de sessão (não quebra seu app)
-    redir = require_web_login(request)
-    if redir:
-        return redir
-
-    templates = request.app.state.templates
-
-    # sanitização de paginação
-    page = max(int(page or 1), 1)
-    page_size = int(page_size or 20)
-    page_size = 20 if page_size not in (10, 20, 50, 100) else page_size
-
-    cpf_digits = only_digits(cpf)
-    empresa_id_int: Optional[int] = None
-    if str(empresa_id).strip().isdigit():
-        empresa_id_int = int(str(empresa_id).strip())
-
-    q_clean = (q or "").strip()
-
-    # dropdown empresas
-    empresas = (
-        db.query(Empresa)
-        .filter(Empresa.is_active == True)
-        .order_by(Empresa.nome.asc())
-        .all()
-    )
-
-    query = (
-        db.query(Paciente, Empresa)
-        .join(Empresa, Paciente.empresa_id == Empresa.id)
-        .filter(Paciente.is_active == True)
-    )
-
-    if cpf_digits:
-        # cpf no seu model é String(11) com index, então igualdade é o melhor
-        query = query.filter(Paciente.cpf == cpf_digits)
-
-    if empresa_id_int:
-        query = query.filter(Paciente.empresa_id == empresa_id_int)
-
-    if q_clean:
-        # busca por nome (LIKE case-insensitive)
-        # SQLite não tem ILIKE, então usamos lower()
-        q_like = f"%{q_clean.lower()}%"
-        query = query.filter(
-            (Paciente.nome_completo.ilike(q_like))  # Postgres
-            if hasattr(Paciente.nome_completo, "ilike")
-            else (Paciente.nome_completo != None)  # placeholder
-        )
-        # fallback compatível com SQLite:
-        try:
-            from sqlalchemy import func
-            query = query.filter(func.lower(Paciente.nome_completo).like(q_like))
-        except Exception:
-            # se não der, não quebra; só ignora o q
-            pass
-
-    total = query.count()
-
-    rows = (
-        query.order_by(Paciente.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
-
-    pacientes_view = []
-    for p, e in rows:
-        pacientes_view.append(
-            {
-                "id": p.id,
-                "nome_completo": p.nome_completo,
-                "cpf": p.cpf,
-                "celular": p.celular,
-                "empresa_id": p.empresa_id,
-                "empresa_nome": e.nome if e else "",
-                "is_active": p.is_active,
-                "created_at": p.created_at,
-                "last_login_at": p.last_login_at,
-            }
-        )
-
-    pages = max((total + page_size - 1) // page_size, 1)
-
-    return templates.TemplateResponse(
-        "pacientes/list.html",
-        {
-            "request": request,
-            "pacientes": pacientes_view,
-            "empresas": empresas,
-            "filters": {
-                "cpf": cpf_digits,
-                "empresa_id": empresa_id_int or "",
-                "q": q_clean,
-            },
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total": total,
-                "pages": pages,
-                "has_prev": page > 1,
-                "has_next": page < pages,
-                "prev_page": page - 1,
-                "next_page": page + 1,
-            },
-        },
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
