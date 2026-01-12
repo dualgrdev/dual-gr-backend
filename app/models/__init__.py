@@ -8,6 +8,7 @@ from app.models.finance_categoria import FinanceCategoria
 from app.models.finance_forma_pagamento import FinanceFormaPagamento
 from app.models.finance_conta import FinanceConta
 from app.models.finance_lancamento import FinanceLancamento
+from app.models.anamnese import AnamneseRegistro
 
 __all__ = [
     "Empresa",
@@ -20,4 +21,5 @@ __all__ = [
     "FinanceFormaPagamento",
     "FinanceConta",
     "FinanceLancamento",
+    "AnamneseRegistro",
 ]

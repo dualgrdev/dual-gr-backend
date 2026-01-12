@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Paciente</h1>
+    <p class="muted">{{ paciente.nome_completo }} • {{ paciente.cpf }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/admin/pacientes">Voltar</a>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>Dados</h3>
+    <div class="kv">
+      <div><span class="k">Empresa</span><span class="v">{{ paciente.empresa_nome }}</span></div>
+      <div><span class="k">Celular</span><span class="v">{{ paciente.celular }}</span></div>
+      <div><span class="k">Endereço</span><span class="v">{{ paciente.endereco }}</span></div>
+      <div><span class="k">CEP</span><span class="v">{{ paciente.cep }}</span></div>
+      <div><span class="k">Criado</span><span class="v">{{ paciente.created_at }}</span></div>
+      <div><span class="k">Último login</span><span class="v">{{ paciente.last_login_at or "-" }}</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Perfil Saúde</h3>
+    <div class="kv">
+      <div><span class="k">Data nascimento</span><span class="v">{{ paciente.data_nascimento or "-" }}</span></div>
+      <div><span class="k">Sexo biológico</span><span class="v">{{ paciente.sexo_biologico or "-" }}</span></div>
+      <div><span class="k">Altura</span><span class="v">{{ (paciente.altura_cm|string) + " cm" if paciente.altura_cm else "-" }}</span></div>
+      <div><span class="k">Peso</span><span class="v">{{ (paciente.peso_kg|string) + " kg" if paciente.peso_kg else "-" }}</span></div>
+    </div>
+
+    <div class="notice">
+      A área de “Anamnese (últimos 3 registros)” vai entrar aqui na próxima etapa.
+    </div>
+  </div>
+</div>
+{% endblock %}

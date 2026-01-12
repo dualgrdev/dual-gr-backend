@@ -126,6 +126,13 @@ def pacientes_list(
                 "celular": p.celular,
                 "empresa_id": p.empresa_id,
                 "empresa_nome": e.nome if e else "",
+
+                # Perfil Saúde (novos campos)
+                "data_nascimento": getattr(p, "data_nascimento", None),
+                "sexo_biologico": getattr(p, "sexo_biologico", None),
+                "altura_cm": getattr(p, "altura_cm", None),
+                "peso_kg": getattr(p, "peso_kg", None),
+
                 "created_at": p.created_at,
                 "last_login_at": p.last_login_at,
             }
@@ -154,5 +161,58 @@ def pacientes_list(
                 "prev_page": page - 1,
                 "next_page": page + 1,
             },
+        },
+    )
+
+
+# =========================
+# DETALHE DO PACIENTE
+# =========================
+@router.get("/{paciente_id}", response_class=HTMLResponse)
+def paciente_detail(
+    request: Request,
+    paciente_id: int,
+    db: Session = Depends(get_db),
+):
+    redir = require_admin_login(request)
+    if redir:
+        return redir
+
+    templates = request.app.state.templates
+
+    row = (
+        db.query(Paciente, Empresa)
+        .join(Empresa, Paciente.empresa_id == Empresa.id)
+        .filter(Paciente.id == paciente_id, Paciente.is_active == True)
+        .first()
+    )
+    if not row:
+        return RedirectResponse(url="/admin/pacientes", status_code=303)
+
+    p, e = row
+
+    paciente = {
+        "id": p.id,
+        "nome_completo": p.nome_completo,
+        "cpf": p.cpf,
+        "celular": p.celular,
+        "empresa_nome": e.nome if e else "",
+        "endereco": p.endereco,
+        "cep": p.cep,
+        "created_at": p.created_at,
+        "last_login_at": p.last_login_at,
+
+        # Perfil Saúde
+        "data_nascimento": getattr(p, "data_nascimento", None),
+        "sexo_biologico": getattr(p, "sexo_biologico", None),
+        "altura_cm": getattr(p, "altura_cm", None),
+        "peso_kg": getattr(p, "peso_kg", None),
+    }
+
+    return templates.TemplateResponse(
+        "pacientes/detail.html",
+        {
+            "request": request,
+            "paciente": paciente,
         },
     )

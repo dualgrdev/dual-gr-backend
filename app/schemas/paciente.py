@@ -1,13 +1,16 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 class PacienteCreate(BaseModel):
     nome_completo: str = Field(min_length=3, max_length=200)
+
+    # ✅ NOVO
+    email: EmailStr
+
     cpf: str
     celular: str
 
-    # ETAPA 3 — empresa pode vir por ID (preferencial) ou por nome (fallback)
     empresa_id: Optional[int] = None
     empresa: Optional[str] = None
 
@@ -24,6 +27,7 @@ class PacienteCreate(BaseModel):
 class PacienteOut(BaseModel):
     id: int
     nome_completo: str
+    email: str
     cpf: str
     celular: str
     empresa: str

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2 style="margin:0 0 12px 0;">Anamnese — {{ paciente.nome_completo }}</h2>
+
+  <div style="margin-bottom:14px;">
+    <a class="btn" href="/pacientes">Voltar</a>
+  </div>
+
+  {% if registros|length == 0 %}
+    <div class="card">
+      <p>Sem registros de anamnese.</p>
+    </div>
+  {% else %}
+    {% for r in registros %}
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <strong>Registrado em:</strong>
+          <span>{{ r.created_at }}</span>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(0,0,0,0.08);margin:10px 0;">
+
+        <p><strong>Queixa:</strong> {{ r.queixa_principal }}</p>
+        <p><strong>Sintomas:</strong> {{ r.sintomas }}</p>
+        {% if r.sintoma_outro %}<p><strong>Outro:</strong> {{ r.sintoma_outro }}</p>{% endif %}
+        {% if r.intensidade_0a10 %}<p><strong>Intensidade:</strong> {{ r.intensidade_0a10 }}/10</p>{% endif %}
+        {% if r.frequencia %}<p><strong>Frequência:</strong> {{ r.frequencia }}</p>{% endif %}
+        {% if r.ha_quanto_tempo %}<p><strong>Há quanto tempo:</strong> {{ r.ha_quanto_tempo }}</p>{% endif %}
+
+        <p><strong>Doenças:</strong> {{ r.doencas }}</p>
+        {% if r.doencas_outros %}<p><strong>Outras:</strong> {{ r.doencas_outros }}</p>{% endif %}
+
+        <p><strong>Medicamento:</strong> {{ "Sim" if r.usa_medicamento else "Não" }}</p>
+        {% if r.medicamento_nome %}<p><strong>Nome:</strong> {{ r.medicamento_nome }}</p>{% endif %}
+        {% if r.medicamento_dosagem %}<p><strong>Dosagem:</strong> {{ r.medicamento_dosagem }}</p>{% endif %}
+        {% if r.medicamento_frequencia %}<p><strong>Frequência:</strong> {{ r.medicamento_frequencia }}</p>{% endif %}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

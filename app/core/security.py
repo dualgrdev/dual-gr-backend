@@ -10,22 +10,39 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# bcrypt limita o segredo a 72 bytes
+_BCRYPT_MAX_BYTES = 72
+
+
+def _password_too_long(password: str) -> bool:
+    try:
+        return len((password or "").encode("utf-8")) > _BCRYPT_MAX_BYTES
+    except Exception:
+        # se der qualquer problema, trata como inválido
+        return True
+
 
 def hash_password(password: str) -> str:
+    if _password_too_long(password):
+        raise ValueError("Senha muito longa para bcrypt (máx. 72 bytes).")
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Evita crash do passlib/bcrypt quando a senha excede 72 bytes
+    if _password_too_long(plain_password):
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 
-def create_access_token(subject: str, expires_minutes: Optional[int] = None, extra: Optional[Dict[str, Any]] = None) -> str:
-    """
-    Gera JWT de acesso.
-    - sub: identificador do usuário (ex: "paciente:123")
-    - iat: issued-at
-    - exp: expiration (timestamp)
-    """
+def create_access_token(
+    subject: str,
+    expires_minutes: Optional[int] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> str:
     now = datetime.now(timezone.utc)
     minutes = expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
     exp = now + timedelta(minutes=minutes)
@@ -43,7 +60,6 @@ def create_access_token(subject: str, expires_minutes: Optional[int] = None, ext
 
 
 def normalize_text(s: str) -> str:
-    """Remove acentos, baixa case, normaliza espaços."""
     s = (s or "").strip().lower()
     s = unicodedata.normalize("NFKD", s)
     s = "".join(ch for ch in s if not unicodedata.combining(ch))

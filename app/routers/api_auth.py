@@ -88,13 +88,12 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
     if exists:
         raise HTTPException(status_code=409, detail="CPF já cadastrado.")
 
-    # bcrypt limite 72 bytes: hash_password() pode levantar ValueError agora
+    # bcrypt limite 72 bytes: hash_password() pode levantar ValueError
     try:
         pw_hash = hash_password(data.senha)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
-        # fallback defensivo: não vaza erro interno
         raise HTTPException(status_code=400, detail="Senha inválida.")
 
     paciente = Paciente(
@@ -137,7 +136,38 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     db.commit()
 
     token = create_access_token(subject=f"paciente:{user.id}")
-    return TokenOut(access_token=token)
+
+    # ✅ Retorna também dados para o App exibir o nome real
+    return TokenOut(
+        access_token=token,
+        paciente_id=user.id,
+        nome_completo=user.nome_completo,
+        cpf=user.cpf,
+    )
+
+
+@router.get("/me", response_model=dict)
+def me(cpf: str, db: Session = Depends(get_db)):
+    """
+    Endpoint simples para o app buscar dados pelo CPF (se você quiser usar).
+    OBS: O ideal é usar autenticação via token.
+    Como seu app ainda não envia token em requests, mantive simples.
+    """
+    cpf_d = only_digits(cpf)
+    user = db.query(Paciente).filter(Paciente.cpf == cpf_d, Paciente.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    return {
+        "id": user.id,
+        "nome_completo": user.nome_completo,
+        "cpf": user.cpf,
+        "celular": user.celular,
+        "empresa_id": user.empresa_id,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "last_login_at": user.last_login_at,
+    }
 
 
 @router.get("/forgot/question", response_model=ForgotQuestionOut)
@@ -188,5 +218,4 @@ def forgot_reset(data: ResetPasswordIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Senha inválida.")
 
     db.commit()
-
     return {"success": True, "message": "Senha alterada com sucesso."}

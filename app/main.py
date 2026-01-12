@@ -23,6 +23,7 @@ from app.routers.web_empresas import router as web_empresas_router
 from app.routers.web_campanhas import router as web_campanhas_router
 from app.routers.web_materiais import router as web_materiais_router
 from app.routers.web_pacientes import router as web_pacientes_router
+from app.routers.api_anamnese import router as api_anamnese_router
 
 
 from app.routers.fin_auth import router as fin_auth_router
@@ -110,6 +111,7 @@ app.include_router(web_empresas_router)
 app.include_router(web_campanhas_router)
 app.include_router(web_materiais_router)
 app.include_router(web_pacientes_router)
+app.include_router(api_anamnese_router)
 
 # Financeiro
 app.include_router(fin_auth_router)

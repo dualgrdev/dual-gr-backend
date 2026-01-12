@@ -12,6 +12,10 @@ class Paciente(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     nome_completo: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    # ✅ NOVO
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True, nullable=False)
+
     cpf: Mapped[str] = mapped_column(String(11), unique=True, index=True, nullable=False)
     celular: Mapped[str] = mapped_column(String(11), nullable=False)
 
