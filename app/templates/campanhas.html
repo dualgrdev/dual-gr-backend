@@ -8,22 +8,50 @@
   </div>
 
   {% set msg = request.query_params.get('msg') %}
+
   {% if msg == "criada" %}<div class="toast ok">Campanha criada.</div>{% endif %}
   {% if msg == "atualizada" %}<div class="toast ok">Campanha atualizada.</div>{% endif %}
   {% if msg == "removida" %}<div class="toast ok">Campanha removida.</div>{% endif %}
   {% if msg == "nao_encontrada" %}<div class="toast warn">Campanha não encontrada.</div>{% endif %}
-  {% if msg == "img_invalida" %}<div class="toast warn">Imagem inválida (use jpg/png/webp).</div>{% endif %}
+
   {% if msg == "invalido" %}<div class="toast warn">Preencha título e mensagem corretamente.</div>{% endif %}
+
+  {# ====== NOVAS MENSAGENS (validação de imagem) ====== #}
+  {% if msg == "img_invalida" %}
+    <div class="toast warn">Imagem inválida (use jpg/png/webp e arquivo íntegro).</div>
+  {% endif %}
+  {% if msg == "img_pequena" %}
+    <div class="toast warn">Imagem muito pequena. Use no mínimo 800×450 (recomendado 1600×900).</div>
+  {% endif %}
+  {% if msg == "img_grande" %}
+    <div class="toast warn">Imagem muito grande. Use no máximo 3000×3000 (recomendado 1600×900).</div>
+  {% endif %}
+  {% if msg == "img_proporcao" %}
+    <div class="toast warn">Proporção inválida. Use banner horizontal (recomendado 16:9, ex.: 1600×900).</div>
+  {% endif %}
 
   <div class="grid-2">
     <div class="card">
       <h3>Nova Campanha</h3>
+
+      <div class="muted small" style="margin-bottom: 12px; line-height: 1.35;">
+        <div><b>Imagem (opcional)</b> deve ser banner horizontal.</div>
+        <div>Recomendado: <b>1600×900</b> (16:9). Mínimo: 800×450.</div>
+        <div>Formatos aceitos: jpg, png, webp.</div>
+      </div>
+
       <form method="post" action="/admin/campanhas/create" enctype="multipart/form-data">
         <label>Título</label>
-        <input name="titulo" required />
+        <input name="titulo" required maxlength="80" placeholder="Ex.: Janeiro Branco" />
 
         <label>Mensagem</label>
-        <input name="mensagem" required />
+        <textarea
+          name="mensagem"
+          required
+          rows="4"
+          maxlength="500"
+          placeholder="Mensagem curta e objetiva. No app, ela aparece somente ao clicar."
+        ></textarea>
 
         <label>Ordem (0 = primeiro)</label>
         <input name="ordem" type="number" value="0" />
@@ -52,10 +80,36 @@
             <div class="trow">
               <div>
                 <div class="strong">{{ c.titulo }}</div>
-                <div class="muted small">{{ c.mensagem }}</div>
+
+                {# Mensagem pode ser grande; limita visualmente no painel #}
+                <div class="muted small" style="max-width: 720px;">
+                  {{ c.mensagem }}
+                </div>
+
                 <div class="muted small">Ordem: {{ c.ordem }}</div>
+
                 {% if c.imagem_url %}
-                  <div class="muted small">Imagem: <a href="{{ c.imagem_url }}" target="_blank">abrir</a></div>
+                  <div class="muted small" style="margin-top: 6px;">
+                    Imagem:
+                    <a href="{{ c.imagem_url }}" target="_blank" rel="noopener">abrir</a>
+                  </div>
+
+                  {# Preview leve (não quebra layout) #}
+                  <div style="margin-top: 8px;">
+                    <a href="{{ c.imagem_url }}" target="_blank" rel="noopener" title="Abrir imagem">
+                      <img
+                        src="{{ c.imagem_url }}"
+                        alt="Banner"
+                        style="
+                          width: 220px;
+                          height: auto;
+                          border-radius: 10px;
+                          border: 1px solid rgba(0,0,0,0.08);
+                          display: block;
+                        "
+                      />
+                    </a>
+                  </div>
                 {% endif %}
               </div>
 
@@ -70,7 +124,9 @@
               <div class="right actions">
                 <form method="post" action="/admin/campanhas/toggle">
                   <input type="hidden" name="campanha_id" value="{{ c.id }}" />
-                  <button class="btn-secondary" type="submit">{% if c.is_active %}Desativar{% else %}Ativar{% endif %}</button>
+                  <button class="btn-secondary" type="submit">
+                    {% if c.is_active %}Desativar{% else %}Ativar{% endif %}
+                  </button>
                 </form>
 
                 <form method="post" action="/admin/campanhas/delete" onsubmit="return confirm('Remover campanha?');">

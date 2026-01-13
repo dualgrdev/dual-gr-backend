@@ -1,4 +1,5 @@
 from datetime import datetime
+from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -38,6 +39,28 @@ def get_db():
         db.close()
 
 
+# ============================================================
+# Helpers (reduz repetição e melhora consistência)
+# ============================================================
+def _get_active_user_by_cpf(db: Session, cpf_raw: str) -> Paciente:
+    cpf = only_digits(cpf_raw)
+    user = db.query(Paciente).filter(Paciente.cpf == cpf, Paciente.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    return user
+
+
+def _check_security_answer(user: Paciente, answer_raw: str) -> None:
+    # Normaliza e compara de forma mais segura (evita diferenças triviais e timing leaks básicos)
+    expected = (user.resposta_seg_norm or "").strip()
+    given = normalize_text(answer_raw or "")
+    if not expected or not compare_digest(given, expected):
+        raise HTTPException(status_code=400, detail="Resposta incorreta.")
+
+
+# ============================================================
+# REGISTER
+# ============================================================
 @router.post("/register", response_model=dict)
 def register(data: PacienteCreate, db: Session = Depends(get_db)):
     cpf = only_digits(data.cpf)
@@ -114,6 +137,9 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
     return {"success": True, "message": "Cadastro realizado com sucesso."}
 
 
+# ============================================================
+# LOGIN
+# ============================================================
 @router.post("/login", response_model=TokenOut)
 def login(data: LoginIn, db: Session = Depends(get_db)):
     cpf = only_digits(data.cpf)
@@ -137,7 +163,6 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=f"paciente:{user.id}")
 
-    # ✅ Retorna também dados para o App exibir o nome real
     return TokenOut(
         access_token=token,
         paciente_id=user.id,
@@ -146,18 +171,16 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     )
 
 
+# ============================================================
+# ME (mantido para compatibilidade)
+# ============================================================
 @router.get("/me", response_model=dict)
 def me(cpf: str, db: Session = Depends(get_db)):
     """
-    Endpoint simples para o app buscar dados pelo CPF (se você quiser usar).
-    OBS: O ideal é usar autenticação via token.
-    Como seu app ainda não envia token em requests, mantive simples.
+    Endpoint simples para o app buscar dados pelo CPF (compatibilidade).
+    Ideal: usar token. Mantido para não quebrar.
     """
-    cpf_d = only_digits(cpf)
-    user = db.query(Paciente).filter(Paciente.cpf == cpf_d, Paciente.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-
+    user = _get_active_user_by_cpf(db, cpf)
     return {
         "id": user.id,
         "nome_completo": user.nome_completo,
@@ -170,37 +193,31 @@ def me(cpf: str, db: Session = Depends(get_db)):
     }
 
 
+# ============================================================
+# FORGOT FLOW
+# 1) GET /forgot/question?cpf=...
+# 2) POST /forgot/verify  {cpf, resposta}
+# 3) POST /forgot/reset   {cpf, resposta, nova_senha, repetir_senha}
+# ============================================================
 @router.get("/forgot/question", response_model=ForgotQuestionOut)
 def forgot_question(cpf: str, db: Session = Depends(get_db)):
-    cpf_d = only_digits(cpf)
-    user = db.query(Paciente).filter(Paciente.cpf == cpf_d, Paciente.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    return ForgotQuestionOut(pergunta=user.pergunta_seg)
+    user = _get_active_user_by_cpf(db, cpf)
+    return ForgotQuestionOut(pergunta=user.pergunta_seg or "")
 
 
 @router.post("/forgot/verify", response_model=dict)
 def forgot_verify(data: ForgotVerifyIn, db: Session = Depends(get_db)):
-    cpf = only_digits(data.cpf)
-    user = db.query(Paciente).filter(Paciente.cpf == cpf, Paciente.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    user = _get_active_user_by_cpf(db, data.cpf)
+    _check_security_answer(user, data.resposta)
 
-    if normalize_text(data.resposta) != user.resposta_seg_norm:
-        raise HTTPException(status_code=400, detail="Resposta incorreta.")
-
+    # Mantém formato simples para o app
     return {"success": True, "message": "Resposta confirmada."}
 
 
 @router.post("/forgot/reset", response_model=dict)
 def forgot_reset(data: ResetPasswordIn, db: Session = Depends(get_db)):
-    cpf = only_digits(data.cpf)
-    user = db.query(Paciente).filter(Paciente.cpf == cpf, Paciente.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-
-    if normalize_text(data.resposta) != user.resposta_seg_norm:
-        raise HTTPException(status_code=400, detail="Resposta incorreta.")
+    user = _get_active_user_by_cpf(db, data.cpf)
+    _check_security_answer(user, data.resposta)
 
     if data.nova_senha != data.repetir_senha:
         raise HTTPException(status_code=400, detail="Senha e repetir senha não conferem.")

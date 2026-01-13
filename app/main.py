@@ -16,6 +16,10 @@ from app.services.storage import ensure_storage_dir
 from app.routers.api_auth import router as api_auth_router
 from app.routers.api_public import router as api_public_router
 from app.routers.api_metrics import router as api_metrics_router
+from app.routers.api_anamnese import router as api_anamnese_router
+
+# ✅ NOVO: endpoint da IA (PDF exames)
+from app.routers.api_pedidos_exame import router as api_pedidos_exame_router
 
 from app.routers.web_auth import router as web_auth_router
 from app.routers.web_dashboard import router as web_dashboard_router
@@ -23,8 +27,6 @@ from app.routers.web_empresas import router as web_empresas_router
 from app.routers.web_campanhas import router as web_campanhas_router
 from app.routers.web_materiais import router as web_materiais_router
 from app.routers.web_pacientes import router as web_pacientes_router
-from app.routers.api_anamnese import router as api_anamnese_router
-
 
 from app.routers.fin_auth import router as fin_auth_router
 from app.routers.fin_caixa import router as fin_caixa_router
@@ -103,6 +105,10 @@ if storage_dir.exists():
 app.include_router(api_auth_router)
 app.include_router(api_public_router)
 app.include_router(api_metrics_router)
+app.include_router(api_anamnese_router)
+
+# ✅ NOVO: IA - leitura de PDF de exames (rota /api/pedidos-exame/ler)
+app.include_router(api_pedidos_exame_router)
 
 # Web Admin
 app.include_router(web_auth_router)
@@ -111,7 +117,6 @@ app.include_router(web_empresas_router)
 app.include_router(web_campanhas_router)
 app.include_router(web_materiais_router)
 app.include_router(web_pacientes_router)
-app.include_router(api_anamnese_router)
 
 # Financeiro
 app.include_router(fin_auth_router)

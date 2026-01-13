@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -5,6 +7,9 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.campanha import Campanha
 from app.services.storage import save_upload_local
+
+# Pillow (PIL) para validar dimensões
+from PIL import Image, UnidentifiedImageError
 
 
 router = APIRouter(tags=["Web - Campanhas"])
@@ -24,13 +29,81 @@ def require_login(request: Request):
     return None
 
 
+# ============================================================
+# Regras de imagem (banner)
+# App mostra em 16:9 -> validação aqui evita distorção/corte ruim
+# ============================================================
+ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+MIN_W = 800
+MIN_H = 450
+
+MAX_W = 3000
+MAX_H = 3000
+
+# tolerância de proporção (w/h)
+MIN_AR = 1.60  # ~ (16/10)
+MAX_AR = 1.90  # ~ (19/10) - cobre 16:9 com folga pequena
+
+
+def _get_image_size_and_validate(upload: UploadFile) -> tuple[int, int]:
+    """
+    Lê o header da imagem e valida:
+    - é imagem real
+    - dimensões mín/máx
+    - proporção compatível com 16:9
+    Mantém compatibilidade com save_upload_local (faz seek(0) no final).
+    """
+    # Lê bytes (precisamos abrir a imagem). Depois damos seek(0) para permitir o salvamento.
+    try:
+        raw = upload.file.read()
+        if not raw:
+            raise ValueError("arquivo_vazio")
+
+        img = Image.open(BytesIO(raw))
+        img.verify()  # verifica integridade sem decodificar tudo
+
+        # reabrir para pegar size (verify fecha internals)
+        img2 = Image.open(BytesIO(raw))
+        w, h = img2.size
+
+    except UnidentifiedImageError:
+        raise ValueError("img_invalida")
+    except Exception:
+        # Qualquer falha de leitura
+        raise ValueError("img_invalida")
+    finally:
+        try:
+            upload.file.seek(0)
+        except Exception:
+            pass
+
+    # dimensões
+    if w < MIN_W or h < MIN_H:
+        raise ValueError("img_pequena")
+
+    if w > MAX_W or h > MAX_H:
+        raise ValueError("img_grande")
+
+    # proporção
+    ar = (w / h) if h else 0.0
+    if ar < MIN_AR or ar > MAX_AR:
+        raise ValueError("img_proporcao")
+
+    return w, h
+
+
 @router.get("/admin/campanhas", response_class=HTMLResponse)
 def campanhas_list(request: Request, db: Session = Depends(get_db)):
     guard = require_login(request)
     if guard:
         return guard
 
-    campanhas = db.query(Campanha).order_by(Campanha.is_active.desc(), Campanha.ordem.asc(), Campanha.id.desc()).all()
+    campanhas = (
+        db.query(Campanha)
+        .order_by(Campanha.is_active.desc(), Campanha.ordem.asc(), Campanha.id.desc())
+        .all()
+    )
     templates = request.app.state.templates
     return templates.TemplateResponse("campanhas.html", {"request": request, "campanhas": campanhas})
 
@@ -56,11 +129,37 @@ def campanhas_create(
     imagem_url = None
     if imagem and imagem.filename:
         try:
-            imagem_url = save_upload_local(imagem, subdir="campanhas", allowed_exts={".jpg", ".jpeg", ".png", ".webp"})
+            # 1) valida dimensões e proporção (sem quebrar save_upload_local)
+            _get_image_size_and_validate(imagem)
+
+            # 2) salva no storage
+            imagem_url = save_upload_local(
+                imagem,
+                subdir="campanhas",
+                allowed_exts=ALLOWED_EXTS,
+            )
+        except ValueError as e:
+            code = str(e)
+
+            # mapeia para msgs do painel (você pode tratar no template)
+            if code == "img_pequena":
+                return RedirectResponse(url="/admin/campanhas?msg=img_pequena", status_code=303)
+            if code == "img_grande":
+                return RedirectResponse(url="/admin/campanhas?msg=img_grande", status_code=303)
+            if code == "img_proporcao":
+                return RedirectResponse(url="/admin/campanhas?msg=img_proporcao", status_code=303)
+
+            return RedirectResponse(url="/admin/campanhas?msg=img_invalida", status_code=303)
         except Exception:
             return RedirectResponse(url="/admin/campanhas?msg=img_invalida", status_code=303)
 
-    c = Campanha(titulo=titulo, mensagem=mensagem, imagem_url=imagem_url, ordem=ordem, is_active=True)
+    c = Campanha(
+        titulo=titulo,
+        mensagem=mensagem,
+        imagem_url=imagem_url,
+        ordem=ordem,
+        is_active=True,
+    )
     db.add(c)
     db.commit()
 
