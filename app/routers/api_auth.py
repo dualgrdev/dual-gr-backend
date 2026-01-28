@@ -1,9 +1,15 @@
+# app/routers/api_auth.py
+from __future__ import annotations
+
 from datetime import datetime
 from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -18,6 +24,7 @@ from app.schemas.auth import (
     LoginIn,
     ResetPasswordIn,
     TokenOut,
+    ChangePasswordIn,  # ✅ novo
 )
 from app.schemas.paciente import PacienteCreate
 from app.services.cpf import (
@@ -30,6 +37,8 @@ from app.services.cpf import (
 
 router = APIRouter(prefix="/api/auth", tags=["App Auth"])
 
+security = HTTPBearer(auto_error=False)
+
 
 def get_db():
     db = SessionLocal()
@@ -40,7 +49,7 @@ def get_db():
 
 
 # ============================================================
-# Helpers (reduz repetição e melhora consistência)
+# Helpers
 # ============================================================
 def _get_active_user_by_cpf(db: Session, cpf_raw: str) -> Paciente:
     cpf = only_digits(cpf_raw)
@@ -51,11 +60,45 @@ def _get_active_user_by_cpf(db: Session, cpf_raw: str) -> Paciente:
 
 
 def _check_security_answer(user: Paciente, answer_raw: str) -> None:
-    # Normaliza e compara de forma mais segura (evita diferenças triviais e timing leaks básicos)
     expected = (user.resposta_seg_norm or "").strip()
     given = normalize_text(answer_raw or "")
     if not expected or not compare_digest(given, expected):
         raise HTTPException(status_code=400, detail="Resposta incorreta.")
+
+
+def _parse_subject(sub: str) -> int:
+    """
+    subject esperado: "paciente:{id}"
+    """
+    s = (sub or "").strip()
+    if not s.startswith("paciente:"):
+        raise HTTPException(status_code=401, detail="Token inválido (subject).")
+    try:
+        return int(s.split(":", 1)[1])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido (subject).")
+
+
+def _decode_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado.")
+
+
+def get_current_paciente(
+    creds: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> Paciente:
+    if creds is None or not creds.credentials:
+        raise HTTPException(status_code=401, detail="Não autenticado.")
+    payload = _decode_token(creds.credentials)
+    paciente_id = _parse_subject(payload.get("sub", ""))
+
+    user = db.query(Paciente).filter(Paciente.id == paciente_id, Paciente.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado ou inativo.")
+    return user
 
 
 # ============================================================
@@ -82,27 +125,14 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
             detail="Senha fraca. Use mínimo 8 caracteres, com letras e números.",
         )
 
-    # ============================================================
-    # Empresa deve existir e estar ativa
-    # Preferencial: empresa_id (vem do dropdown do app)
-    # Fallback: empresa por nome (compatibilidade)
-    # ============================================================
+    # Empresa ativa (preferencial por id)
     empresa = None
-
     if data.empresa_id:
-        empresa = (
-            db.query(Empresa)
-            .filter(Empresa.id == data.empresa_id, Empresa.is_active == True)
-            .first()
-        )
+        empresa = db.query(Empresa).filter(Empresa.id == data.empresa_id, Empresa.is_active == True).first()
     else:
         nome_emp = (data.empresa or "").strip()
         if nome_emp:
-            empresa = (
-                db.query(Empresa)
-                .filter(Empresa.nome == nome_emp, Empresa.is_active == True)
-                .first()
-            )
+            empresa = db.query(Empresa).filter(Empresa.nome == nome_emp, Empresa.is_active == True).first()
 
     if not empresa:
         raise HTTPException(status_code=400, detail="Empresa não autorizada ou não cadastrada.")
@@ -111,7 +141,6 @@ def register(data: PacienteCreate, db: Session = Depends(get_db)):
     if exists:
         raise HTTPException(status_code=409, detail="CPF já cadastrado.")
 
-    # bcrypt limite 72 bytes: hash_password() pode levantar ValueError
     try:
         pw_hash = hash_password(data.senha)
     except ValueError as e:
@@ -145,7 +174,6 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     cpf = only_digits(data.cpf)
     user = db.query(Paciente).filter(Paciente.cpf == cpf, Paciente.is_active == True).first()
 
-    # Nunca deixar bcrypt/passlib derrubar com 500
     ok = False
     try:
         ok = bool(user) and verify_password(data.senha, user.password_hash)
@@ -172,14 +200,51 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
 
 
 # ============================================================
-# ME (mantido para compatibilidade)
+# CHANGE PASSWORD (✅ NOVO - via Bearer token)
+# ============================================================
+@router.post("/change-password", response_model=dict)
+def change_password(
+    data: ChangePasswordIn,
+    user: Paciente = Depends(get_current_paciente),
+    db: Session = Depends(get_db),
+):
+    # valida repetir
+    if data.nova_senha != data.repetir_senha:
+        raise HTTPException(status_code=400, detail="Nova senha e repetir senha não conferem.")
+
+    # valida força
+    if not is_strong_password(data.nova_senha):
+        raise HTTPException(
+            status_code=400,
+            detail="Senha fraca. Use mínimo 8 caracteres, com letras e números.",
+        )
+
+    # valida senha atual
+    try:
+        if not verify_password(data.senha_atual, user.password_hash):
+            raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+
+    # atualiza hash
+    try:
+        user.password_hash = hash_password(data.nova_senha)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Senha inválida.")
+
+    db.commit()
+    return {"success": True, "message": "Senha alterada com sucesso."}
+
+
+# ============================================================
+# ME (compatibilidade)
 # ============================================================
 @router.get("/me", response_model=dict)
 def me(cpf: str, db: Session = Depends(get_db)):
-    """
-    Endpoint simples para o app buscar dados pelo CPF (compatibilidade).
-    Ideal: usar token. Mantido para não quebrar.
-    """
     user = _get_active_user_by_cpf(db, cpf)
     return {
         "id": user.id,
@@ -195,9 +260,6 @@ def me(cpf: str, db: Session = Depends(get_db)):
 
 # ============================================================
 # FORGOT FLOW
-# 1) GET /forgot/question?cpf=...
-# 2) POST /forgot/verify  {cpf, resposta}
-# 3) POST /forgot/reset   {cpf, resposta, nova_senha, repetir_senha}
 # ============================================================
 @router.get("/forgot/question", response_model=ForgotQuestionOut)
 def forgot_question(cpf: str, db: Session = Depends(get_db)):
@@ -209,8 +271,6 @@ def forgot_question(cpf: str, db: Session = Depends(get_db)):
 def forgot_verify(data: ForgotVerifyIn, db: Session = Depends(get_db)):
     user = _get_active_user_by_cpf(db, data.cpf)
     _check_security_answer(user, data.resposta)
-
-    # Mantém formato simples para o app
     return {"success": True, "message": "Resposta confirmada."}
 
 
