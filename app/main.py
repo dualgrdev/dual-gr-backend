@@ -2,8 +2,8 @@
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 
@@ -12,6 +12,9 @@ from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.db.init_db import ensure_admin
 from app.services.storage import ensure_storage_dir
+
+# 🔧 FIX SQLite legado (Render)
+from app.db.sqlite_fix import ensure_sqlite_columns
 
 # =========================
 # Routers API (App)
@@ -40,16 +43,7 @@ from app.routers.fin_caixa import router as fin_caixa_router
 from app.routers.fin_relatorios import router as fin_relatorios_router
 
 
-# ============================================================
-# Helpers
-# ============================================================
 def _parse_cors_origins(value) -> list[str]:
-    """
-    Aceita:
-      - "*" (libera geral, mas sem credenciais)
-      - lista separada por vírgula
-      - vazio -> defaults locais
-    """
     v = (value or "").strip()
     if not v:
         return [
@@ -65,17 +59,12 @@ def _parse_cors_origins(value) -> list[str]:
 
 cors_origins = _parse_cors_origins(getattr(settings, "CORS_ORIGINS", ""))
 
-# ============================================================
-# App
-# ============================================================
 app = FastAPI(title=settings.APP_NAME)
 
 # =========================
 # CORS
 # =========================
-allow_credentials = True
-if cors_origins == ["*"]:
-    allow_credentials = False
+allow_credentials = cors_origins != ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,7 +75,7 @@ app.add_middleware(
 )
 
 # =========================
-# Sessões (cookies – painel web)
+# Sessões Web
 # =========================
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
@@ -104,24 +93,21 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # =========================
-# Uploads / Storage
+# Uploads
 # =========================
 storage_dir = Path(ensure_storage_dir())
 if storage_dir.exists():
     app.mount("/uploads", StaticFiles(directory=str(storage_dir)), name="uploads")
 
-# ============================================================
+# =========================
 # Routers
-# ============================================================
-
-# ---- API App ----
+# =========================
 app.include_router(api_auth_router)
 app.include_router(api_public_router)
 app.include_router(api_metrics_router)
 app.include_router(api_anamnese_router)
 app.include_router(api_pedidos_exame_router)
 
-# ---- Web Admin ----
 app.include_router(web_auth_router)
 app.include_router(web_dashboard_router)
 app.include_router(web_empresas_router)
@@ -129,39 +115,29 @@ app.include_router(web_campanhas_router)
 app.include_router(web_materiais_router)
 app.include_router(web_pacientes_router)
 
-# ---- Financeiro ----
 app.include_router(fin_auth_router)
 app.include_router(fin_caixa_router)
 app.include_router(fin_relatorios_router)
 
 
-# ============================================================
-# Healthcheck
-# ============================================================
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "app": settings.APP_NAME,
-        "env": settings.ENV,
-    }
+    return {"status": "ok", "app": settings.APP_NAME, "env": settings.ENV}
 
 
-# ============================================================
-# Startup
-# ============================================================
 @app.on_event("startup")
 def on_startup():
-    # Garante pasta de uploads
+    # garante storage
     ensure_storage_dir()
 
-    # ⚠️ IMPORTANTE:
-    # Só cria tabelas automaticamente em DEV
-    # Em produção (Render/Postgres) deve usar Alembic
+    # 🔧 Corrige SQLite antigo (colunas faltantes)
+    ensure_sqlite_columns(engine)
+
+    # DEV apenas: cria tabelas que NÃO EXISTEM
     if settings.ENV == "dev":
         Base.metadata.create_all(bind=engine)
 
-    # Seed admin
+    # garante admin
     db = SessionLocal()
     try:
         ensure_admin(db)
