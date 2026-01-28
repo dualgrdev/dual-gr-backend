@@ -7,19 +7,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 
+from sqlalchemy.exc import OperationalError
+
 from app.core.config import settings
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.db.init_db import ensure_admin
 from app.services.storage import ensure_storage_dir
 
+from app.db.sqlite_bootstrap import ensure_sqlite_schema
+
 from app.routers.api_auth import router as api_auth_router
 from app.routers.api_public import router as api_public_router
 from app.routers.api_metrics import router as api_metrics_router
 from app.routers.api_anamnese import router as api_anamnese_router
 
-# ✅ NOVO: endpoint da IA (PDF exames)
-from app.routers.api_pedidos_exame import router as api_pedidos_exame_router
+# ✅ IA (PDF exames)
+from app.routers.api_pedidos_exame import (
+    router as api_pedidos_exame_router,
+    router_alias as api_pedidos_exame_router_alias,
+)
 
 from app.routers.web_auth import router as web_auth_router
 from app.routers.web_dashboard import router as web_dashboard_router
@@ -107,8 +114,9 @@ app.include_router(api_public_router)
 app.include_router(api_metrics_router)
 app.include_router(api_anamnese_router)
 
-# ✅ NOVO: IA - leitura de PDF de exames (rota /api/pedidos-exame/ler)
+# IA - leitura de PDF de exames (rotas)
 app.include_router(api_pedidos_exame_router)
+app.include_router(api_pedidos_exame_router_alias)
 
 # Web Admin
 app.include_router(web_auth_router)
@@ -131,15 +139,25 @@ def health():
 
 @app.on_event("startup")
 def on_startup():
-    # garante pasta storage (uploads)
+    # 1) garante pasta storage (uploads)
     ensure_storage_dir()
 
-    # DEV: cria tabelas automaticamente (evita travar antes do Alembic).
-    # Produção (Render/Postgres): usar Alembic (upgrade head).
-    if settings.ENV == "dev":
-        Base.metadata.create_all(bind=engine)
+    # 2) Corrige schema SQLite antigo (ex.: adiciona pacientes.email)
+    #    (idempotente, não faz nada se não for SQLite)
+    ensure_sqlite_schema(engine)
 
-    # Seed do admin (se não existir)
+    # 3) DEV: cria tabelas automaticamente.
+    #    Em SQLite + múltiplos workers pode dar race condition.
+    if settings.ENV == "dev":
+        try:
+            Base.metadata.create_all(bind=engine)
+        except OperationalError as e:
+            # Se for erro de "já existe" por concorrência, ignora.
+            msg = str(e).lower()
+            if "already exists" not in msg:
+                raise
+
+    # 4) Seed do admin (se não existir)
     db = SessionLocal()
     try:
         ensure_admin(db)
