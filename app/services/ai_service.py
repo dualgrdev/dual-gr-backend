@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import base64
 from typing import Any, Dict, Optional
 
@@ -29,18 +30,18 @@ def _build_prompt_text(extracted_text: str, doc_type: str) -> str:
 Você é uma enfermeira virtual da Dual GR.
 
 IMPORTANTE:
-- Você só pode analisar documentos do tipo {doc_label} (Exames OU Receitas).
+- Você só pode analisar documentos do tipo {doc_label} (EXAME ou RECEITA).
 - Se o conteúdo NÃO for claramente {doc_label}, responda com JSON indicando recusa.
 
 Regras:
 - Não dê diagnóstico definitivo.
-- Não analise boletos, contratos, RG/CPF, laudos não médicos, documentos pessoais etc.
+- Não analise boletos, contratos, RG/CPF, documentos pessoais, etc.
 - Se houver sinais de urgência/emergência, oriente procurar atendimento imediato.
 - Use linguagem PT-BR simples e direta.
 - Responda em JSON estrito com os campos definidos.
 
 TEXTO EXTRAÍDO:
-\"\"\"{extracted_text[:25000]}\"\"\"
+\"\"\"{(extracted_text or "")[:25000]}\"\"\"
 
 Retorne JSON com este schema:
 {{
@@ -125,7 +126,6 @@ def _parse_json_or_fallback(content: str, doc_type: str) -> Dict[str, Any]:
             "motivo_recusa": None,
         }
 
-    import json
     try:
         obj = json.loads(content)
         if isinstance(obj, dict):
@@ -161,13 +161,19 @@ def analyze_exam_or_rx_text(extracted_text: str, doc_type: str, model: Optional[
 
     prompt = _build_prompt_text(extracted_text, doc_type)
 
-    resp = client.responses.create(
+    # ✅ compatível com openai==1.57.4
+    resp = client.chat.completions.create(
         model=used_model,
-        input=prompt,
         temperature=0.2,
+        messages=[
+            {"role": "user", "content": prompt},
+        ],
+        # força retorno JSON quando o modelo suportar
+        response_format={"type": "json_object"},
     )
 
-    return _parse_json_or_fallback(getattr(resp, "output_text", "") or "", doc_type)
+    content = (resp.choices[0].message.content or "").strip()
+    return _parse_json_or_fallback(content, doc_type)
 
 
 def analyze_exam_or_rx_image_bytes(
@@ -193,19 +199,21 @@ def analyze_exam_or_rx_image_bytes(
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:{mime};base64,{b64}"
 
-    # Estrutura de conteúdo com imagem (image_url.url)
-    resp = client.responses.create(
+    # ✅ chat.completions com content multimodal
+    resp = client.chat.completions.create(
         model=used_model,
-        input=[
+        temperature=0.2,
+        messages=[
             {
                 "role": "user",
                 "content": [
-                    {"type": "input_text", "text": prompt},
-                    {"type": "input_image", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
                 ],
             }
         ],
-        temperature=0.2,
+        response_format={"type": "json_object"},
     )
 
-    return _parse_json_or_fallback(getattr(resp, "output_text", "") or "", doc_type)
+    content = (resp.choices[0].message.content or "").strip()
+    return _parse_json_or_fallback(content, doc_type)
