@@ -7,27 +7,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 
-from sqlalchemy.exc import OperationalError
-
 from app.core.config import settings
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.db.init_db import ensure_admin
 from app.services.storage import ensure_storage_dir
 
-from app.db.sqlite_bootstrap import ensure_sqlite_schema
-
+# =========================
+# Routers API (App)
+# =========================
 from app.routers.api_auth import router as api_auth_router
 from app.routers.api_public import router as api_public_router
 from app.routers.api_metrics import router as api_metrics_router
 from app.routers.api_anamnese import router as api_anamnese_router
+from app.routers.api_pedidos_exame import router as api_pedidos_exame_router
 
-# ✅ IA (PDF exames)
-from app.routers.api_pedidos_exame import (
-    router as api_pedidos_exame_router,
-    router_alias as api_pedidos_exame_router_alias,
-)
-
+# =========================
+# Routers Web (Admin)
+# =========================
 from app.routers.web_auth import router as web_auth_router
 from app.routers.web_dashboard import router as web_dashboard_router
 from app.routers.web_empresas import router as web_empresas_router
@@ -35,16 +32,22 @@ from app.routers.web_campanhas import router as web_campanhas_router
 from app.routers.web_materiais import router as web_materiais_router
 from app.routers.web_pacientes import router as web_pacientes_router
 
+# =========================
+# Routers Financeiro
+# =========================
 from app.routers.fin_auth import router as fin_auth_router
 from app.routers.fin_caixa import router as fin_caixa_router
 from app.routers.fin_relatorios import router as fin_relatorios_router
 
 
+# ============================================================
+# Helpers
+# ============================================================
 def _parse_cors_origins(value) -> list[str]:
     """
     Aceita:
       - "*" (libera geral, mas sem credenciais)
-      - lista separada por vírgula: "https://site.com,http://localhost:3000"
+      - lista separada por vírgula
       - vazio -> defaults locais
     """
     v = (value or "").strip()
@@ -62,12 +65,14 @@ def _parse_cors_origins(value) -> list[str]:
 
 cors_origins = _parse_cors_origins(getattr(settings, "CORS_ORIGINS", ""))
 
+# ============================================================
+# App
+# ============================================================
 app = FastAPI(title=settings.APP_NAME)
 
 # =========================
 # CORS
 # =========================
-# Regra: se origins = ["*"], NÃO pode usar allow_credentials=True.
 allow_credentials = True
 if cors_origins == ["*"]:
     allow_credentials = False
@@ -81,7 +86,7 @@ app.add_middleware(
 )
 
 # =========================
-# Sessões (cookie) - painéis web
+# Sessões (cookies – painel web)
 # =========================
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
@@ -105,20 +110,18 @@ storage_dir = Path(ensure_storage_dir())
 if storage_dir.exists():
     app.mount("/uploads", StaticFiles(directory=str(storage_dir)), name="uploads")
 
-# =========================
+# ============================================================
 # Routers
-# =========================
-# API App
+# ============================================================
+
+# ---- API App ----
 app.include_router(api_auth_router)
 app.include_router(api_public_router)
 app.include_router(api_metrics_router)
 app.include_router(api_anamnese_router)
-
-# IA - leitura de PDF de exames (rotas)
 app.include_router(api_pedidos_exame_router)
-app.include_router(api_pedidos_exame_router_alias)
 
-# Web Admin
+# ---- Web Admin ----
 app.include_router(web_auth_router)
 app.include_router(web_dashboard_router)
 app.include_router(web_empresas_router)
@@ -126,38 +129,39 @@ app.include_router(web_campanhas_router)
 app.include_router(web_materiais_router)
 app.include_router(web_pacientes_router)
 
-# Financeiro
+# ---- Financeiro ----
 app.include_router(fin_auth_router)
 app.include_router(fin_caixa_router)
 app.include_router(fin_relatorios_router)
 
 
+# ============================================================
+# Healthcheck
+# ============================================================
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": settings.APP_NAME, "env": settings.ENV}
+    return {
+        "status": "ok",
+        "app": settings.APP_NAME,
+        "env": settings.ENV,
+    }
 
 
+# ============================================================
+# Startup
+# ============================================================
 @app.on_event("startup")
 def on_startup():
-    # 1) garante pasta storage (uploads)
+    # Garante pasta de uploads
     ensure_storage_dir()
 
-    # 2) Corrige schema SQLite antigo (ex.: adiciona pacientes.email)
-    #    (idempotente, não faz nada se não for SQLite)
-    ensure_sqlite_schema(engine)
-
-    # 3) DEV: cria tabelas automaticamente.
-    #    Em SQLite + múltiplos workers pode dar race condition.
+    # ⚠️ IMPORTANTE:
+    # Só cria tabelas automaticamente em DEV
+    # Em produção (Render/Postgres) deve usar Alembic
     if settings.ENV == "dev":
-        try:
-            Base.metadata.create_all(bind=engine)
-        except OperationalError as e:
-            # Se for erro de "já existe" por concorrência, ignora.
-            msg = str(e).lower()
-            if "already exists" not in msg:
-                raise
+        Base.metadata.create_all(bind=engine)
 
-    # 4) Seed do admin (se não existir)
+    # Seed admin
     db = SessionLocal()
     try:
         ensure_admin(db)
